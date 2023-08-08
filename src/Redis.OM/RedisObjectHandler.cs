@@ -458,7 +458,7 @@ namespace Redis.OM
                 }
                 else if (type.GetInterfaces().Any(x => x.IsGenericType && x.GetGenericTypeDefinition() == typeof(IEnumerable<>)))
                 {
-                    var entries = hash.Where(x => x.Key.StartsWith($"{propertyName}["))
+                    var entries = hash.Where(x => x.Key.StartsWith(propertyName))
                         .ToDictionary(x => x.Key, x => x.Value);
                     var innerType = GetEnumerableType(property);
                     if (innerType == null)
@@ -475,40 +475,7 @@ namespace Redis.OM
                     }
                     else if (entries.Any())
                     {
-                        ret += $"\"{propertyName}\":[";
-                        for (var i = 0; i < entries.Count(); i++)
-                        {
-                            if (innerType == typeof(bool) || innerType == typeof(bool?))
-                            {
-                                var val = entries[$"{propertyName}[{i}]"];
-                                ret += $"{val.ToLower()},";
-                            }
-                            else if (innerType.IsPrimitive || innerType == typeof(decimal))
-                            {
-                                var val = entries[$"{propertyName}[{i}]"];
-                                ret += $"{val},";
-                            }
-                            else if (innerType == typeof(string))
-                            {
-                                var val = entries[$"{propertyName}[{i}]"];
-                                ret += $"\"{val}\",";
-                            }
-                            else
-                            {
-                                var dictionary = entries.Where(x => x.Key.StartsWith($"{propertyName}[{i}]"))
-                                    .Select(x => new KeyValuePair<string, string>(
-                                        x.Key.Substring($"{propertyName}[{i}]".Length), x.Value))
-                                    .ToDictionary(x => x.Key, x => x.Value);
-                                if (dictionary.Any())
-                                {
-                                    ret += SendToJson(entries, innerType);
-                                    ret += ",";
-                                }
-                            }
-                        }
-
-                        ret = ret.TrimEnd(',');
-                        ret += "],";
+                        ret += $"\"{propertyName}\":{entries[propertyName]},";
                     }
                 }
                 else
