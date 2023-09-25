@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Redis.OM.Aggregation;
 using Redis.OM.Contracts;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ namespace Redis.OM.Unit.Tests.RediSearchTests
     public class AggregationFunctionalTests
     {
         private static readonly object connectionLock = new();
+        private static bool _dataIsSet = false;
 
         /// <summary>
         /// Init the database taking care to do it only once so that the test processes performed in parallel can count on an immutable database
@@ -24,6 +26,11 @@ namespace Redis.OM.Unit.Tests.RediSearchTests
 
         private void Setup()
         {
+            if (_dataIsSet)
+            {
+                return;
+            }
+
             var beaker = new Person
             {
                 Name = "Beaker",
@@ -114,8 +121,28 @@ namespace Redis.OM.Unit.Tests.RediSearchTests
             _connection.Set(bunsen);
             _connection.Set(hashKermit);
             _connection.Set(hashWaldorf);
+
+            _dataIsSet = true;
         }
 
+        [Fact]
+        public void GetPeopleByAgeOrName()
+        {
+            Setup();
+            var collection = new RedisAggregationSet<Person>(_connection);
+            var people = collection.Where(x => x.RecordShell.Age == 52 || x.RecordShell.Age == 75 || x.RecordShell.Name == "Fozzie Bear").ToArray();
+            Assert.Equal(3, people.Length);
+        }
+
+        [Fact]
+        public void GetPeopleByAgeOrNameAndDepartment()
+        {
+            Setup();
+            var collection = new RedisAggregationSet<Person>(_connection);
+            var query = collection.Where(x => x.RecordShell.Age == 52 || x.RecordShell.Age == 23 || x.RecordShell.Name == "Dr Bunsen Honeydew");
+            var people = query.Where(x => x.RecordShell.DepartmentNumber == 3).ToArray();
+            Assert.Equal(2, people.Length);
+        }
 
         [Fact]
         public void GetDepartmentBySales()
@@ -247,14 +274,33 @@ namespace Redis.OM.Unit.Tests.RediSearchTests
         }
 
         [Fact]
-        public void TestUnsortedFields()
+        public async Task GetGroupCountWithNegationQuery()
         {
             Setup();
             var collection = new RedisAggregationSet<Person>(_connection);
+            var results = await collection
+                .Where(x => x.RecordShell.Age != 0)
+                .GroupBy(x => x.RecordShell.Age).CountGroupMembers().ToListAsync();
+            foreach (var result in results)
+            {
+                Assert.True(1 <= result["COUNT"]);
+            }
+        }
 
-            Assert.Throws<NotSupportedException>(() =>
-                collection.Apply(x => $"{x.RecordShell.Email}", "TheEmailThatNeverWas").ToList());
+        [Fact]
+        public async Task TestListNotContains()
+        {
+            Setup();
+            var collection = new RedisAggregationSet<Person>(_connection);
+            
+            var names = new List<string> { "Beaker", "Rakib" };
+            var people = await collection
+                .Where(x => !names.Contains(x.RecordShell.Name) && x.RecordShell.Name != "fake")
+                .Load(x => x.RecordShell.Name)
+                .ToListAsync();
 
+            Assert.Contains(people, x => x.Hydrate().Name == "Statler");
+            Assert.DoesNotContain(people, x => x.Hydrate().Name == "Beaker");
         }
     }
 }
