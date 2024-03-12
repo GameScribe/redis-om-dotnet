@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Redis.OM;
 
 namespace Redis.OM.Searching
 {
@@ -54,7 +53,8 @@ namespace Redis.OM.Searching
             var dict = new Dictionary<string, T>();
             foreach (var kvp in Documents)
             {
-                var obj = RedisObjectHandler.FromHashSet<T>(kvp.Value);
+                var rrDict = kvp.Value.ToDictionary(x => x.Key, x => (RedisReply)x.Value);
+                var obj = RedisObjectHandler.FromHashSet<T>(rrDict);
                 dict.Add(kvp.Key, obj);
             }
 
@@ -112,7 +112,7 @@ namespace Redis.OM.Searching
                 for (var i = 1; i < vals.Count(); i += 2)
                 {
                     var docId = (string)vals[i];
-                    var documentHash = new Dictionary<string, string>();
+                    var documentHash = new Dictionary<string, RedisReply>();
                     var docArray = vals[i + 1].ToArray();
                     if (docArray.Length > 1)
                     {
@@ -124,6 +124,10 @@ namespace Redis.OM.Searching
                         var obj = RedisObjectHandler.FromHashSet<T>(documentHash);
                         Documents.Add(docId, obj);
                     }
+                    else
+                    {
+                        DocumentsSkippedCount++; // needed when a key expired while it was being enumerated by Redis.
+                    }
                 }
             }
         }
@@ -131,6 +135,7 @@ namespace Redis.OM.Searching
         private SearchResponse()
         {
             DocumentCount = 0;
+            DocumentsSkippedCount = 0;
             Documents = new Dictionary<string, T>();
         }
 
@@ -138,6 +143,12 @@ namespace Redis.OM.Searching
         /// Gets or sets the number of documents found by the search.
         /// </summary>
         public long DocumentCount { get; set; }
+
+        /// <summary>
+        /// Gets the number of documents skipped while enumerating the search result set.
+        /// This can be indicative of documents that have expired during enumeration.
+        /// </summary>
+        public int DocumentsSkippedCount { get; private set; }
 
         /// <summary>
         /// Gets the documents.

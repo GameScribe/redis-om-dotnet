@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using Redis.OM;
 using Redis.OM.Modeling;
 
 namespace Redis.OM.Unit.Tests.RediSearchTests
@@ -32,6 +31,9 @@ namespace Redis.OM.Unit.Tests.RediSearchTests
 
         [Indexed(Sortable = true)]
         public double? Height { get; set; }
+
+        [Indexed(Sortable = true)]
+        public decimal? Salary { get; set; }
 
         [ListType]
         [Indexed]
